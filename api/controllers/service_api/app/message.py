@@ -115,7 +115,33 @@ class MessageSuggestedApi(Resource):
 
         return {"result": "success", "data": questions}
 
+class MessageItemApi(Resource):
+    @validate_app_token(fetch_user_arg=FetchUserArg(fetch_from=WhereisUserArg.JSON, required=True))
+    def delete(self, app_model: App, end_user: EndUser, message_id):
+        message_id = str(message_id)
+        try:
+            MessageService.delete_message_by_id(app_model, end_user, message_id)
+        except services.errors.message.MessageNotExistsError:
+            raise NotFound("Message Not Exists.")
+        return {"result": "success"}
+
+    @validate_app_token(fetch_user_arg=FetchUserArg(fetch_from=WhereisUserArg.JSON, required=True))
+    def put(self, app_model: App, end_user: EndUser, message_id):
+        message_id = str(message_id)
+
+        parser = reqparse.RequestParser()
+        parser.add_argument("query", type=str, location="json")
+        parser.add_argument("answer", type=str, location="json")
+        args = parser.parse_args()
+
+        try:
+            MessageService.update_message_by_id(app_model, end_user, message_id, query=args["query"], answer=args["answer"])
+        except services.errors.message.MessageNotExistsError:
+            raise NotFound("Message Not Exists.")
+        return {"result": "success"}
+
 
 api.add_resource(MessageListApi, "/messages")
 api.add_resource(MessageFeedbackApi, "/messages/<uuid:message_id>/feedbacks")
 api.add_resource(MessageSuggestedApi, "/messages/<uuid:message_id>/suggested")
+api.add_resource(MessageItemApi, "/messages/<uuid:message_id>")

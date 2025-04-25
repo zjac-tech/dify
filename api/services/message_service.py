@@ -22,6 +22,10 @@ from services.errors.message import (
     SuggestedQuestionsAfterAnswerDisabledError,
 )
 from services.workflow_service import WorkflowService
+from datetime import datetime, timezone as UTC
+from typing import Optional, Union
+from models.model import App, Account, EndUser, Message
+from services.errors.message import MessageNotExistsError
 
 
 class MessageService:
@@ -135,6 +139,44 @@ class MessageService:
             history_messages = history_messages[:-1]
 
         return InfiniteScrollPagination(data=history_messages, limit=limit, has_more=has_more)
+
+    @classmethod
+    def delete(cls, app_model: App, message_id: str, user: Optional[Union[Account, EndUser]]):
+        message = db.session.query(Message).filter(
+            Message.id == message_id,
+            Message.app_id == app_model.id,
+            Message.from_source == ("api" if isinstance(user, EndUser) else "console"),
+            Message.from_end_user_id == (user.id if isinstance(user, EndUser) else None),
+            Message.from_account_id == (user.id if isinstance(user, Account) else None),
+            Message.is_deleted == False
+        ).first()
+
+        if not message:
+            raise MessageNotExistsError()
+
+        message.is_deleted = True
+        message.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        db.session.commit()
+    
+    @classmethod
+    def update(cls, app_model: App, message_id: str, user: Optional[Union[Account, EndUser]], new_query: str):
+        message = db.session.query(Message).filter(
+            Message.id == message_id,
+            Message.app_id == app_model.id,
+            Message.from_source == ("api" if isinstance(user, EndUser) else "console"),
+            Message.from_end_user_id == (user.id if isinstance(user, EndUser) else None),
+            Message.from_account_id == (user.id if isinstance(user, Account) else None),
+            Message.is_deleted == False
+        ).first()
+
+        if not message:
+            raise MessageNotExistsError()
+
+        message.query = new_query
+        message.updated_at = datetime.now(UTC).replace(tzinfo=None)
+        db.session.commit()
+
+        return message        
 
     @classmethod
     def create_feedback(
